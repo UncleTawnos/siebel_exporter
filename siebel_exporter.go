@@ -79,7 +79,9 @@ func main() {
 		defer cancel()
 		log.Info("	- Terminate srvrmgr")
 		if srvrMgr != nil {
-			srvrMgr.Disconnect()
+			if err := srvrMgr.Disconnect(); err != nil {
+				log.Errorln(err)
+			}
 		}
 		log.Infof("	- Close %s", exporterName)
 	}

@@ -58,13 +58,12 @@ func (ss *safeStatus) Get() SrvrmgrStatus {
 	return ss.value
 }
 
-func (ss *safeStatus) Set(value SrvrmgrStatus) error {
+func (ss *safeStatus) Set(value SrvrmgrStatus) {
 	ss.Lock()
 	defer ss.Unlock()
 
 	log.Debugf("Set srvrmgr status from '%v' to '%v'.", ss.value.String(), value.String())
 	ss.value = value
-	return nil
 }
 
 type safeServerName struct {
@@ -79,12 +78,11 @@ func (ssn *safeServerName) Get() string {
 	return ssn.value
 }
 
-func (ssn *safeServerName) Set(value string) error {
+func (ssn *safeServerName) Set(value string) {
 	ssn.Lock()
 	defer ssn.Unlock()
 
 	ssn.value = value
-	return nil
 }
 
 type srvrMgr struct {
@@ -194,7 +192,7 @@ func (sm *srvrMgr) connect() error {
 	connRes, err := sm.executeCommand(sm.connectCmd)
 	if err != nil {
 		sm.status.Set(ConnectionError)
-		defer sm.disconnect()
+		defer sm.disconnectQuietly()
 		log.Errorln(err)
 		return err
 	}
@@ -207,7 +205,7 @@ func (sm *srvrMgr) connect() error {
 	// if !strings.Contains(connRes, "Connected to 1 server(s)") {
 	if !strings.Contains(connRes, "total of 1 server(s)") {
 		sm.status.Set(ConnectionError)
-		defer sm.disconnect()
+		defer sm.disconnectQuietly()
 		err := fmt.Errorf("error! Connection established, but it looks like there are multiple servers. Did you forget to define '/s' argument in connection command?")
 		log.Errorln(err)
 		return err
@@ -217,7 +215,7 @@ func (sm *srvrMgr) connect() error {
 	serverNameMatch := regexp.MustCompile("srvrmgr:([^>]+?)>").FindStringSubmatch(connRes)
 	if len(serverNameMatch) <= 1 {
 		sm.status.Set(ConnectionError)
-		defer sm.disconnect()
+		defer sm.disconnectQuietly()
 		err := fmt.Errorf("error! Connection established, but server name not found. Did you forget to define '/s' argument in connection command?")
 		log.Errorln(err)
 		return err
@@ -229,9 +227,19 @@ func (sm *srvrMgr) connect() error {
 	log.Infoln("Successfully connected to server: '" + serverName + "'.")
 
 	// Disable footer (last string in command result like "12 rows returned.")
-	sm.executeCommand("set footer false")
+	if _, err := sm.executeCommand("set footer false"); err != nil {
+		log.Errorln(err)
+	}
 
 	return nil
+}
+
+// disconnectQuietly disconnects and logs any error. It is meant for deferred
+// cleanup in error paths, where the original error is the one worth returning.
+func (sm *srvrMgr) disconnectQuietly() {
+	if err := sm.disconnect(); err != nil {
+		log.Errorln(err)
+	}
 }
 
 func (sm *srvrMgr) disconnect() error {

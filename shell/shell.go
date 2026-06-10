@@ -106,12 +106,10 @@ type Shell interface { // https://stackoverflow.com/a/53034166
 func NewShell(readBufferSize int) Shell {
 	log.Debugln("NewShell")
 
-	shellType, err := getShellType()
+	cmd, err := newShellCommand()
 	if err != nil {
 		panic(err)
 	}
-
-	cmd := exec.Command(shellType)
 
 	stdInPipe, err := cmd.StdinPipe()
 	if err != nil {
@@ -199,7 +197,11 @@ func (s *shell) executeCommand(cmd string) (string, error) {
 			log.Errorln(err)
 			return "", err
 		}
-		defer s.status.Set(WaitingForCommand)
+		defer func() {
+			if err := s.status.Set(WaitingForCommand); err != nil {
+				log.Errorln(err)
+			}
+		}()
 	}
 
 	if !s.stdOutReader.ready {
@@ -226,8 +228,8 @@ func (s *shell) executeCommand(cmd string) (string, error) {
 	}
 
 	var (
-		cmdResult string = ""
-		cmdError  error  = nil
+		cmdResult = ""
+		cmdError  error
 	)
 
 	select {
@@ -280,7 +282,9 @@ func (s *shell) terminate() {
 	s.stdErrReader.quitCh <- true
 	s.stdOutReader.quitCh <- true
 
-	s.executeCommand("exit")
+	if _, err := s.executeCommand("exit"); err != nil {
+		log.Errorln(err)
+	}
 
 	// time.Sleep(100 * time.Millisecond)
 
@@ -303,15 +307,18 @@ func (s *shell) terminate() {
 	}
 }
 
-func getShellType() (string, error) {
+// newShellCommand builds the *exec.Cmd for the interactive shell of the current
+// OS. The executable name is a hardcoded literal per supported OS (not derived
+// from external input), which keeps the subprocess invocation safe by design.
+func newShellCommand() (*exec.Cmd, error) {
 	switch strings.ToLower(runtime.GOOS) {
 	case "linux":
-		return "bash", nil
+		return exec.Command("bash"), nil
 	// @TODO: Need universal solution for Linux and Windows
 	// case "windows":
-	// 	return "cmd", nil
+	// 	return exec.Command("cmd"), nil
 	default:
-		return "", errors.New("unsupported os '" + runtime.GOOS + "'")
+		return nil, errors.New("unsupported os '" + runtime.GOOS + "'")
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"hash"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -257,7 +258,9 @@ func pingGatewayServer(smgr *srvrmgr.SrvrMgr) error {
 	if _, err := (*smgr).ExecuteCommand("list ent param MaxThreads show PA_VALUE"); err != nil {
 		log.Errorln("Error pinging Siebel Gateway Server:", err)
 		log.Warnln("Unable to scrape: srvrmgr was lost connection to the Siebel Gateway Server. Will try to reconnect on next scrape.")
-		(*smgr).Disconnect()
+		if derr := (*smgr).Disconnect(); derr != nil {
+			log.Errorln(derr)
+		}
 		return err
 	}
 	log.Debugln("Successfully pinged Siebel Gateway Server.")
@@ -269,7 +272,9 @@ func pingApplicationServer(smgr *srvrmgr.SrvrMgr) error {
 	if _, err := (*smgr).ExecuteCommand("list state values show STATEVAL_NAME"); err != nil {
 		log.Errorln("Error pinging Siebel Application Server:", err)
 		log.Warnln("Unable to scrape: srvrmgr was lost connection to the Siebel Application Server. Will try to reconnect on next scrape.")
-		(*smgr).Disconnect()
+		if derr := (*smgr).Disconnect(); derr != nil {
+			log.Errorln(derr)
+		}
 		return err
 	}
 	log.Debugln("Successfully pinged Siebel Application Server.")
@@ -568,18 +573,22 @@ func convertDateStringToTimestamp(s string, dateFormat string) string {
 // https://prometheus.io/docs/concepts/data_model/#metric-names-and-labels
 func cleanName(s string) string {
 	s = strings.TrimSpace(s)                                        // Trim spaces
-	s = strings.Replace(s, " ", "_", -1)                            // Remove spaces
+	s = strings.ReplaceAll(s, " ", "_")                             // Remove spaces
 	s = regexp.MustCompile(`[^a-zA-Z0-9_]`).ReplaceAllString(s, "") // Remove other bad chars
 	s = strings.ToLower(s)                                          // Switch case to lower
 	return s
 }
 
 func hashFile(h hash.Hash, fn string) error {
-	f, err := os.Open(fn)
+	f, err := os.Open(filepath.Clean(fn))
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			log.Errorln(cerr)
+		}
+	}()
 	if _, err := io.Copy(h, f); err != nil {
 		return err
 	}
