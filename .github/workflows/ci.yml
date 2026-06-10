@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '*'
+  release:
+    types: [ published ]
+    tags:
+      - 'v*'
+
+jobs:
+  # Backend linting
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache-dependency-path: go.sum
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          args: --timeout=5m
+
+  # Backend tests
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache-dependency-path: go.sum
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Run unit tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Run Gosec Security Scanner
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec ./...
+
+  # Container image build + Wiz scan.
+  # Hashed out for now: there is no Dockerfile in this repo yet and the Wiz/ACR
+  # credentials are not configured. Uncomment and adapt once those exist.
+  #
+  # docker:
+  #   name: Build Docker Image
+  #   runs-on: ubuntu-latest
+  #   needs: [lint, test]
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #
+  #     - name: Login to ACR
+  #       uses: docker/login-action@v4
+  #       with:
+  #         registry: ${{ vars.ACR_REGISTRY }}
+  #         username: ${{ secrets.ACR_USERNAME }}
+  #         password: ${{ secrets.ACR_TOKEN }}
+  #
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v4
+  #
+  #     - name: Get TAG or SHA
+  #       id: tag
+  #       run: |
+  #         tag="${GITHUB_SHA}"
+  #         # If release parse the tag name from GITHUB_REF
+  #         if [ "${GITHUB_EVENT_NAME}" == "release" ]; then
+  #           tag=$(echo $GITHUB_REF | sed 's/refs\/tags\///g')
+  #         fi
+  #         echo "tag=$tag" >> $GITHUB_OUTPUT
+  #
+  #     - name: Build API Docker image
+  #       uses: docker/build-push-action@v7
+  #       with:
+  #         context: .
+  #         file: ./Dockerfile
+  #         push: true
+  #         tags: ${{ vars.ACR_REGISTRY }}/siebel-exporter:${{ steps.tag.outputs.tag }}
+  #         cache-from: type=gha
+  #         cache-to: type=gha,mode=max
+  #         build-args: |
+  #           BUILD_DATE=${{ github.event.repository.updated_at }}
+  #           GIT_SHA=${{ github.sha }}
+  #           VERSION=${{ steps.tag.outputs.tag }}
+  #
+  #     - name: Download wiz-cli binary
+  #       run: curl -o wizcli https://wizcli.app.wiz.io/latest/wizcli && chmod +x wizcli
+  #       shell: bash
+  #
+  #     - name: "Verify WizCLI Installation"
+  #       run: ./wizcli --help
+  #       shell: bash
+  #
+  #     - name: "Scan API Image"
+  #       run: |
+  #         docker pull ${{ vars.ACR_REGISTRY }}/siebel-exporter:${{ steps.tag.outputs.tag }}
+  #         ./wizcli auth --id ${{ secrets.WIZTOOL_CLIENT_ID }} --secret ${{ secrets.WIZTOOL_CLIENT_SECRET }}
+  #         ./wizcli docker scan --image ${{ vars.ACR_REGISTRY }}/siebel-exporter:${{ steps.tag.outputs.tag }}
+  #         docker rmi ${{ vars.ACR_REGISTRY }}/siebel-exporter:${{ steps.tag.outputs.tag }}
