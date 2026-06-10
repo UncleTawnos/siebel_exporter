@@ -6,13 +6,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/barkadron/siebel_exporter/exporter"
+	"github.com/barkadron/siebel_exporter/log"
 	"github.com/barkadron/siebel_exporter/srvrmgr"
 	"github.com/barkadron/siebel_exporter/webserver"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
+	versioncollector "github.com/prometheus/client_golang/prometheus/collectors/version"
 	"github.com/prometheus/common/version"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
@@ -72,7 +73,7 @@ func main() {
 	siebelExporter := exporter.NewExporter(srvrMgr, *defaultMetricsFile, *customMetricsFile, *dateFormat, *disableEmptyMetricsOverride, *disableExtendedMetrics)
 
 	prometheus.MustRegister(siebelExporter)
-	prometheus.MustRegister(version.NewCollector(exporterName))
+	prometheus.MustRegister(versioncollector.NewCollector(exporterName))
 
 	terminateSrvrmgr := func(cancel context.CancelFunc) {
 		defer cancel()

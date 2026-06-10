@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/barkadron/siebel_exporter/log"
 	"github.com/barkadron/siebel_exporter/shell"
-	"github.com/prometheus/common/log"
 )
 
 // SrvrmgrStatus is an enumeration of srvrmgr statuses that represent a simple value.
@@ -332,7 +332,7 @@ func (sm *srvrMgr) executeCommand(cmd string) (string, error) {
 		SBL-SCM-00008: Batch read operation failed
 	*/
 	if regexp.MustCompile(`SBL-[^-]+-\d+: Error reported on server`).MatchString(result) {
-		err := fmt.Errorf(result)
+		err := errors.New(result)
 		log.Errorln(err)
 		return "", err
 	}

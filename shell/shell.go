@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/prometheus/common/log"
+	"github.com/barkadron/siebel_exporter/log"
 )
 
 // ShellStatus is an enumeration of shell statuses that represent a simple value.

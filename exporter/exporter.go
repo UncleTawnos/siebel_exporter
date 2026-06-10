@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/barkadron/siebel_exporter/log"
 	"github.com/barkadron/siebel_exporter/srvrmgr"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/log"
 )
 
 // Metric object description
@@ -255,7 +255,7 @@ func checkConnection(smgr *srvrmgr.SrvrMgr) bool {
 func pingGatewayServer(smgr *srvrmgr.SrvrMgr) error {
 	log.Debugln("Ping Siebel Gateway Server...")
 	if _, err := (*smgr).ExecuteCommand("list ent param MaxThreads show PA_VALUE"); err != nil {
-		log.Errorln("Error pinging Siebel Gateway Server: \n", err, "\n")
+		log.Errorln("Error pinging Siebel Gateway Server:", err)
 		log.Warnln("Unable to scrape: srvrmgr was lost connection to the Siebel Gateway Server. Will try to reconnect on next scrape.")
 		(*smgr).Disconnect()
 		return err
@@ -267,7 +267,7 @@ func pingGatewayServer(smgr *srvrmgr.SrvrMgr) error {
 func pingApplicationServer(smgr *srvrmgr.SrvrMgr) error {
 	log.Debugln("Ping Siebel Application Server...")
 	if _, err := (*smgr).ExecuteCommand("list state values show STATEVAL_NAME"); err != nil {
-		log.Errorln("Error pinging Siebel Application Server: \n", err, "\n")
+		log.Errorln("Error pinging Siebel Application Server:", err)
 		log.Warnln("Unable to scrape: srvrmgr was lost connection to the Siebel Application Server. Will try to reconnect on next scrape.")
 		(*smgr).Disconnect()
 		return err

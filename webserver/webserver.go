@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/barkadron/siebel_exporter/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/version"
 )
 
