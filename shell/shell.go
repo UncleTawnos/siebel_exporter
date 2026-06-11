@@ -314,9 +314,12 @@ func newShellCommand() (*exec.Cmd, error) {
 	switch strings.ToLower(runtime.GOOS) {
 	case "linux":
 		return exec.Command("bash"), nil
-	// @TODO: Need universal solution for Linux and Windows
-	// case "windows":
-	// 	return exec.Command("cmd"), nil
+	case "windows":
+		// On Windows the connect command launches Siebel's srvrmgr.exe inside
+		// cmd.exe; once srvrmgr.exe is running it owns the stdin/stdout pipe,
+		// exactly like srvrmgr under bash on Linux. "/q" turns command echo off
+		// so cmd does not echo what we write back into the output we parse.
+		return exec.Command("cmd", "/q"), nil
 	default:
 		return nil, errors.New("unsupported os '" + runtime.GOOS + "'")
 	}
@@ -403,5 +406,7 @@ func read(reader *io.ReadCloser, bufferSize int) (string, error) {
 		}
 	}
 
-	return string(data), readError
+	// Normalize Windows line endings (cmd.exe / srvrmgr.exe emit "\r\n") so the
+	// downstream table parser and prompt matching can assume plain "\n".
+	return strings.ReplaceAll(string(data), "\r\n", "\n"), readError
 }

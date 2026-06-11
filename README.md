@@ -36,6 +36,32 @@ export SRVRMGR_CONNECT_CMD="srvrmgr /g sbldevgtw /e SBA_82 /s sbldevapp /u SADMI
 /path/to/binary/siebel_exporter --log.level error
 ```
 
+### Windows (Server 2022)
+
+On Windows the exporter runs `srvrmgr.exe` inside `cmd.exe`. The connect command
+must therefore set up the Siebel environment and launch `srvrmgr.exe` the same way
+you would interactively. For example:
+
+```bat
+REM connection command (note: use ^ to continue lines, or keep it on one line):
+set SRVRMGR_CONNECT_CMD=call C:\siebel\ses\siebsrvr\siebenv.bat ^&^& srvrmgr /g sbldevgtw /e SBA_82 /s sbldevapp /u SADMIN /p SADMIN /q
+
+REM run the exporter:
+C:\path\to\siebel_exporter.exe --log.level error
+```
+
+Windows line endings (`\r\n`) in `srvrmgr.exe` output are handled automatically.
+
+To build a Windows binary (e.g. cross-compiling from Linux/macOS):
+
+```bash
+GOOS=windows GOARCH=amd64 go build -o siebel_exporter.exe .
+```
+
+> NOTE: To run the exporter as a Windows service, wrap the executable with a
+> service manager such as [NSSM](https://nssm.cc/) or `sc.exe`; the binary itself
+> is a console application.
+
 ## Usage
 
 ```text
