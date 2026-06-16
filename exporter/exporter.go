@@ -60,7 +60,7 @@ type Exporter struct {
 }
 
 var (
-	defaultMetrics Metrics                // Default metrics to scrap. Use external file (default-metrics.toml)
+	defaultMetrics Metrics                // Default metrics to scrap. Use external file (config.toml)
 	customMetrics  Metrics                // Custom metrics to scrap. Use custom external file (if provided)
 	metricsHashMap = make(map[int][]byte) // Metrics Files HashMap
 )

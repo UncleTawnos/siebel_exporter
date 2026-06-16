@@ -76,3 +76,21 @@ Extended = true
 CURR_VAL = "Current value of the Siebel Application Server State Value."
 [Metric.HelpField]
 CURR_VAL = "VD_DESC"
+
+# --- Folder size monitoring (replaces the standalone disk-space scripts) ---
+# Each [[Folder]] is scanned recursively on ScanInterval and exposed as
+# siebel_folder_* metrics (label "path"). ScanInterval is a Go duration string
+# ("1h", "30m", ...); it defaults to "1h" if omitted. With ExpandChildren = true
+# every immediate subfolder is reported as its own series (one series per
+# top-level folder of the drive), reproducing the original scripts; with
+# ExpandChildren = false the aggregate size of Path is reported as one series.
+# Remove the [[Folder]] entries below to disable folder monitoring.
+ScanInterval = "1h"
+
+[[Folder]]
+Path = "C:\\"
+ExpandChildren = true
+
+[[Folder]]
+Path = "G:\\"
+ExpandChildren = true

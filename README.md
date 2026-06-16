@@ -79,8 +79,8 @@ Usage of siebel_exporter:
         Default: "2006-01-02 15:04:05" (is equal to 'yyyy-mm-dd HH:MM:SS').
 
     --exporter.default-metrics (env: EXP_DEFAULT_METRICS)
-        Path to TOML-file with default metrics.
-        Default: "default-metrics.toml".
+        Path to TOML-file with default metrics and folder-monitoring config.
+        Default: "config.toml".
     
     --exporter.custom-metrics (env: EXP_CUSTOM_METRICS)
         Path to TOML-file that may contain various custom metrics.
@@ -142,7 +142,7 @@ Usage of siebel_exporter:
 
 ## Default metrics
 
-This exporter comes with a set of default metrics defined in **default-metrics.toml**.
+This exporter comes with a set of default metrics defined in **config.toml**.
 
 The following metrics are exposed currently:
 
@@ -169,6 +169,53 @@ The following metrics are exposed currently:
 - Additional:
   - siebel_list_state_values_server_*
   - siebel_list_statistics_server_*
+
+## Folder monitoring
+
+The exporter can recursively measure the on-disk size of configured folders and
+expose it as native Prometheus metrics. This replaces the standalone disk-space
+scripts (e.g. `1_CDiscSpaceMonitor_text.py` / `1_GDiscSpaceMonitor_text.py`) that
+summed folder sizes and shipped the result as text logs.
+
+It is configured with a `[[Folder]]` section in the same TOML file used for the
+default metrics (`config.toml`) — no separate file or flag. The exporter
+reads only the `[[Metric]]` entries from that file and ignores the folder section,
+while the folder monitor reads only `ScanInterval` and `[[Folder]]`. Scanning runs
+on its own background ticker, so a slow filesystem walk never blocks a `/metrics`
+scrape. If there are no `[[Folder]]` entries, no scanner runs.
+
+```toml
+# Go duration string; defaults to "1h" if omitted.
+ScanInterval = "1h"
+
+# One series per top-level subfolder of each drive (mirrors the old scripts):
+[[Folder]]
+Path = "C:\\"
+ExpandChildren = true
+
+[[Folder]]
+Path = "G:\\"
+ExpandChildren = true
+
+# A single aggregate size for one specific folder:
+[[Folder]]
+Path = "G:\\apps\\ERP"
+ExpandChildren = false
+```
+
+Metrics exposed (label `path` identifies each folder):
+
+- siebel_folder_size_bytes
+- siebel_folder_files_total
+- siebel_folder_scan_duration_seconds
+- siebel_folder_scan_success
+- siebel_folder_scan_errors_total
+- siebel_folder_last_scan_timestamp_seconds
+
+Symlinks are not followed, and per-entry errors (e.g. permission denied) are
+counted in `siebel_folder_scan_errors_total` and skipped rather than aborting the
+scan — matching the behaviour of the original scripts. Sizes are reported in bytes
+(divide by `1024^3` in Grafana for GB).
 
 ## Custom metrics
 

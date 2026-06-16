@@ -8,6 +8,7 @@ import (
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/barkadron/siebel_exporter/exporter"
+	"github.com/barkadron/siebel_exporter/foldermonitor"
 	"github.com/barkadron/siebel_exporter/log"
 	"github.com/barkadron/siebel_exporter/srvrmgr"
 	"github.com/barkadron/siebel_exporter/webserver"
@@ -22,7 +23,7 @@ var (
 	dateFormat        = kingpin.Flag("srvrmgr.date-format", "Date format (in GO-style) used by srvrmgr. Default value is equal to 'yyyy-mm-dd HH:MM:SS'. (env: SRVRMGR_DATE_FORMAT).").Default(getEnv("SRVRMGR_DATE_FORMAT", "2006-01-02 15:04:05")).String() // yyyy-mm-dd HH:MM:SS
 	// commandTimeout    = kingpin.Flag("srvrmgr.command-timeout", "Maximum duration to wait for command execution. (env: SRVRMGR_COMMAND_TIMEOUT).").Default(getEnv("SRVRMGR_COMMAND_TIMEOUT", "5")).Int()
 
-	defaultMetricsFile          = kingpin.Flag("exporter.default-metrics", "Path to TOML-file with default metrics. (env: EXP_DEFAULT_METRICS).").Default(getEnv("EXP_DEFAULT_METRICS", "default-metrics.toml")).String()
+	defaultMetricsFile          = kingpin.Flag("exporter.default-metrics", "Path to TOML-file with default metrics and folder-monitoring config. (env: EXP_DEFAULT_METRICS).").Default(getEnv("EXP_DEFAULT_METRICS", "config.toml")).String()
 	customMetricsFile           = kingpin.Flag("exporter.custom-metrics", "Path to TOML-file that may contain various custom metrics. (env: EXP_CUSTOM_METRICS).").Default(getEnv("EXP_CUSTOM_METRICS", "")).String()
 	disableEmptyMetricsOverride = kingpin.Flag("exporter.disable-empty-metrics-override", "Disable overriding empty metric values with '0'. (env: EXP_DISABLE_EMPTY_METRICS_OVERRIDE).").Default(getEnv("EXP_DISABLE_EMPTY_METRICS_OVERRIDE", "false")).Bool()
 	disableExtendedMetrics      = kingpin.Flag("exporter.disable-extended-metrics", "Disable metrics with Extended flag. (env: EXP_DISABLE_EXTENDED_METRICS).").Default(getEnv("EXP_DISABLE_EXTENDED_METRICS", "false")).Bool()
@@ -75,8 +76,27 @@ func main() {
 	prometheus.MustRegister(siebelExporter)
 	prometheus.MustRegister(versioncollector.NewCollector(exporterName))
 
+	// Optional folder size monitoring (replaces the standalone disk-space scripts).
+	// The [[Folder]] / ScanInterval sections are read from the same config.toml
+	// file; the exporter ignores them and only reads [[Metric]].
+	var folderMon *foldermonitor.Monitor
+	if cfg := loadFolderConfig(*defaultMetricsFile); cfg != nil && len(cfg.Folder) > 0 {
+		interval, ierr := cfg.Interval()
+		if ierr != nil {
+			log.Errorf("Invalid ScanInterval '%s' in %s: %v. Using default %s.", cfg.ScanInterval, *defaultMetricsFile, ierr, foldermonitor.DefaultScanInterval)
+			interval = foldermonitor.DefaultScanInterval
+		}
+		folderMon = foldermonitor.New(cfg.Folder, interval)
+		prometheus.MustRegister(folderMon)
+		folderMon.Start()
+	}
+
 	terminateSrvrmgr := func(cancel context.CancelFunc) {
 		defer cancel()
+		if folderMon != nil {
+			log.Info("	- Stop folder monitor")
+			folderMon.Stop()
+		}
 		log.Info("	- Terminate srvrmgr")
 		if srvrMgr != nil {
 			if err := srvrMgr.Disconnect(); err != nil {
@@ -89,6 +109,18 @@ func main() {
 	webserver.StartWebServer(webCtx, *listenPort, *metricsEndpoint, *httpReadTimeout, *httpWriteTimeout, *httpIdleTimeout, *shutdownTimeout, *maxRequestsInFlight, *useTLS, *serverCert, *serverKey, &terminateSrvrmgr)
 
 	os.Exit(0)
+}
+
+// loadFolderConfig reads the [[Folder]] / ScanInterval sections from the given
+// TOML file (the same file used for default metrics). Any error is logged and
+// disables folder monitoring rather than aborting the exporter.
+func loadFolderConfig(path string) *foldermonitor.Config {
+	cfg, err := foldermonitor.LoadConfig(path)
+	if err != nil {
+		log.Errorf("Error loading folder-monitor config from '%s': %v. Folder monitoring disabled.", path, err)
+		return nil
+	}
+	return cfg
 }
 
 // getEnv returns the value of an environment variable, or returns the provided fallback value
